@@ -22,6 +22,9 @@ def load_raw_data(data_root: str) -> pd.DataFrame:
         
         # Combine train and test if test exists
         if not df_test.empty:
+            # Avoid duplicate date_ids by keeping only train data for overlapping dates
+            max_train_date = df_train['date_id'].max()
+            df_test = df_test[df_test['date_id'] > max_train_date]
             df = pd.concat([df_train, df_test], ignore_index=True)
         else:
             df = df_train
@@ -34,20 +37,14 @@ def load_raw_data(data_root: str) -> pd.DataFrame:
             # Fallback: create synthetic price
             df['price'] = 100 + np.random.randn(len(df)) * 10
         
-        # Set date_id as index for now (can be converted to datetime later)
-        if df.index.has_duplicates:
-            logger.warning("Duplicate indices found, keeping first occurrence")
-            df = df[~df.index.duplicated(keep='first')]
-        
+        # Set date_id as index and ensure no duplicates
+        df = df.drop_duplicates(subset=['date_id'], keep='first')
         df.set_index('date_id', inplace=True)
         
         logger.info(f"Loaded data with shape: {df.shape}")
         return df
     else:
         raise FileNotFoundError(f"Train data not found at {train_path}")
-    df.sort_index(inplace=True)
-    logger.info(f"Loaded data with shape {df.shape}")
-    return df
 
 def impute_data(df: pd.DataFrame) -> pd.DataFrame:
     """Impute missing values: forward-fill for time series, iterative imputer for systematic."""
@@ -56,11 +53,20 @@ def impute_data(df: pd.DataFrame) -> pd.DataFrame:
     # Forward-fill for time series gaps
     df_imputed = df_imputed.ffill()
     
-    # For remaining NaNs, use iterative imputer (simple version of SoftImpute)
-    imputer = IterativeImputer(random_state=42, max_iter=10)
+    # For remaining NaNs, use median imputation for columns with some data
     numeric_cols = df_imputed.select_dtypes(include=[np.number]).columns
-    if len(numeric_cols) > 0:
-        df_imputed[numeric_cols] = imputer.fit_transform(df_imputed[numeric_cols])
+    for col in numeric_cols:
+        if df_imputed[col].isna().any():
+            if df_imputed[col].isna().all():
+                # If column is all NaN, fill with 0
+                df_imputed[col] = df_imputed[col].fillna(0)
+            else:
+                # Use median for columns with some data
+                median_val = df_imputed[col].median()
+                df_imputed[col] = df_imputed[col].fillna(median_val)
+    
+    logger.info("Imputation completed")
+    return df_imputed
     
     logger.info("Imputation completed")
     return df_imputed
