@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def main():
     parser = argparse.ArgumentParser(description='Run forecasting pipeline')
     parser.add_argument('--config', default='configs/baseline.yaml', help='Path to config YAML file')
-    parser.add_argument('--data-root', default='/data', help='Data root directory')
+    parser.add_argument('--data-root', default='data', help='Data root directory')
     parser.add_argument('--rebuild-cache', action='store_true', help='Rebuild cache')
     parser.add_argument('--use-gpu', action='store_true', help='Use GPU for LightGBM')
     parser.add_argument('--variant', choices=['conservative', 'aggressive', 'mid'], default='conservative', help='Model variant')
