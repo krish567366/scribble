@@ -36,23 +36,40 @@ def normalize_features(df: pd.DataFrame, window: int = 252) -> Tuple[pd.DataFram
 
 def encode_regime(df: pd.DataFrame, n_clusters: int = 3) -> pd.DataFrame:
     """Encode regime using KMeans on macro + vol features."""
-    features = ['macro_feature', 'volatility']  # assume these columns exist
-    if not all(f in df.columns for f in features):
-        logger.warning("Regime features not found, skipping")
-        return df
-    X = df[features].dropna()
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-    regimes = kmeans.fit_predict(X)
-    df['regime'] = pd.Series(regimes, index=X.index)
-    return pd.get_dummies(df, columns=['regime'], prefix='regime')
+    # Use available features for regime detection
+    potential_features = ['M1', 'M2', 'M3', 'V1', 'V2', 'V3', 'volatility']
+    available_features = [f for f in potential_features if f in df.columns]
+    
+    if available_features:
+        X = df[available_features].dropna()
+        if len(X) > n_clusters:
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+            regimes = kmeans.fit_predict(X)
+            df['regime'] = pd.Series(regimes, index=X.index)
+            df = pd.get_dummies(df, columns=['regime'], prefix='regime')
+        else:
+            logger.warning("Not enough data for regime clustering")
+    else:
+        logger.warning("No suitable features found for regime encoding")
+    
+    return df
 
 def create_features(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     """Create all features."""
     df_feat = df.copy()
+    
+    # Compute rolling returns and volatility
     df_feat = df_feat.join(compute_rolling_returns(df_feat))
     df_feat['volatility'] = compute_volatility(df_feat)
-    df_feat, norm_params = normalize_features(df_feat)
+    
+    # Normalize numeric features (exclude target and some categorical)
+    numeric_cols = [col for col in df_feat.select_dtypes(include=[np.number]).columns 
+                   if col not in ['market_forward_excess_returns', 'forward_returns', 'risk_free_rate']]
+    df_feat, norm_params = normalize_features(df_feat[numeric_cols + ['market_forward_excess_returns', 'forward_returns', 'risk_free_rate']], window=252)
+    
+    # Encode regime
     df_feat = encode_regime(df_feat)
+    
     return df_feat, norm_params
 
 def save_features(df: pd.DataFrame, path: str) -> None:

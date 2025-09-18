@@ -13,21 +13,34 @@ logger = logging.getLogger(__name__)
 
 def load_raw_data(data_root: str) -> pd.DataFrame:
     """Load raw data from /data directory."""
-    # Assume data is in CSV or Parquet; adjust as needed
-    data_path = os.path.join(data_root, 'data.csv')  # or 'data.parquet'
-    if os.path.exists(data_path):
-        if data_path.endswith('.csv'):
-            df = pd.read_csv(data_path, parse_dates=['date'])  # assume 'date' column
-        elif data_path.endswith('.parquet'):
-            df = pd.read_parquet(data_path)
-        else:
-            raise ValueError("Unsupported data format")
-    else:
-        raise FileNotFoundError(f"Data file not found at {data_path}")
+    train_path = os.path.join(data_root, 'train.csv')
+    test_path = os.path.join(data_root, 'test.csv')
     
-    # Set index if needed
-    if 'date' in df.columns:
-        df.set_index('date', inplace=True)
+    if os.path.exists(train_path):
+        df_train = pd.read_csv(train_path)
+        df_test = pd.read_csv(test_path) if os.path.exists(test_path) else pd.DataFrame()
+        
+        # Combine train and test if test exists
+        if not df_test.empty:
+            df = pd.concat([df_train, df_test], ignore_index=True)
+        else:
+            df = df_train
+        
+        # Create synthetic price column from forward_returns
+        # Start with price = 100, then cumulatively apply returns
+        if 'forward_returns' in df.columns:
+            df['price'] = 100 * (1 + df['forward_returns']).cumprod()
+        else:
+            # Fallback: create synthetic price
+            df['price'] = 100 + np.random.randn(len(df)) * 10
+        
+        # Set date_id as index for now (can be converted to datetime later)
+        df.set_index('date_id', inplace=True)
+        
+        logger.info(f"Loaded data with shape: {df.shape}")
+        return df
+    else:
+        raise FileNotFoundError(f"Train data not found at {train_path}")
     df.sort_index(inplace=True)
     logger.info(f"Loaded data with shape {df.shape}")
     return df
