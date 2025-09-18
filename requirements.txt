@@ -1,0 +1,11 @@
+pandas
+numpy
+scikit-learn
+lightgbm
+xgboost
+catboost
+joblib
+pyarrow
+fastparquet
+matplotlib
+pytest
