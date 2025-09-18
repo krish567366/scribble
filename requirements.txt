@@ -9,3 +9,4 @@ pyarrow
 fastparquet
 matplotlib
 pytest
+pyyaml

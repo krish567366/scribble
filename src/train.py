@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import logging
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
 import joblib
 from .models import BaseModel, StackedModel, VolatilityModel
 from .utils import save_json
@@ -43,20 +43,27 @@ def train_walk_forward(df: pd.DataFrame, target_col: str, feature_cols: List[str
     all_true = np.concatenate([r[1] for r in results])
     return all_preds, all_true
 
-def train_volatility_model(df: pd.DataFrame, vol_target: str, feature_cols: List[str]) -> VolatilityModel:
+def train_volatility_model(df: pd.DataFrame, vol_target: str, feature_cols: List[str], config: Dict[str, Any] = None) -> VolatilityModel:
     """Train volatility model."""
-    model = VolatilityModel()
+    if config is None:
+        config = {}
+    model_config = config.get('model', {})
+    model = VolatilityModel(max_depth=model_config.get('max_depth', 6), n_estimators=model_config.get('n_estimators', 100))
     model.fit(df[feature_cols], df[vol_target])
     return model
 
-def train_stacked_model(df: pd.DataFrame, target_col: str, feature_cols: List[str]) -> StackedModel:
+def train_stacked_model(df: pd.DataFrame, target_col: str, feature_cols: List[str], config: Dict[str, Any] = None) -> StackedModel:
     """Train stacked model."""
+    if config is None:
+        config = {}
+    model_config = config.get('model', {})
+    
     base_models = [
         BaseModel('ridge'),
         BaseModel('nystroem_ridge'),
-        BaseModel('lightgbm')
+        BaseModel('lightgbm', max_depth=model_config.get('max_depth', 6), n_estimators=model_config.get('n_estimators', 100))
     ]
-    meta_model = BaseModel('lightgbm')
+    meta_model = BaseModel('lightgbm', max_depth=model_config.get('max_depth', 6), n_estimators=model_config.get('n_estimators', 100))
     stacked = StackedModel(base_models, meta_model)
     stacked.fit(df[feature_cols], df[target_col])
     return stacked

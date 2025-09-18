@@ -1,14 +1,18 @@
 import pandas as pd
 import numpy as np
 import logging
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Any
 import matplotlib.pyplot as plt
 from .utils import save_json
 
 logger = logging.getLogger(__name__)
 
-def compute_weights(mu: np.ndarray, sigma: np.ndarray, k: float, variant: str = 'conservative', df: pd.DataFrame = None) -> np.ndarray:
+def compute_weights(mu: np.ndarray, sigma: np.ndarray, k: float, variant: str = 'conservative', df: pd.DataFrame = None, config: Dict[str, Any] = None) -> np.ndarray:
     """Compute position weights with variant adjustments."""
+    if config is None:
+        config = {}
+    regime_sensitivity = config.get('model', {}).get('regime_sensitivity', 0.7)
+    
     base_weights = np.clip(mu / sigma * k, 0, 2)
     
     if variant == 'conservative':
@@ -23,7 +27,7 @@ def compute_weights(mu: np.ndarray, sigma: np.ndarray, k: float, variant: str = 
             # Assume regime_0 is high vol
             high_vol_mask = df['regime_0'] == 1
             weights = base_weights.copy()
-            weights[high_vol_mask] *= 0.7  # Reduce in high vol
+            weights[high_vol_mask] *= regime_sensitivity  # Use config value
         else:
             weights = base_weights
     else:
@@ -51,10 +55,10 @@ def calculate_sharpe(returns: pd.Series, risk_free: float = 0.0) -> float:
         return 0.0
     return excess_returns.mean() / excess_returns.std() * np.sqrt(252)  # Annualized
 
-def calibrate_k(returns: pd.Series, mu: np.ndarray, sigma: np.ndarray, target_vol: float = 0.12, variant: str = 'conservative', df: pd.DataFrame = None) -> float:
+def calibrate_k(returns: pd.Series, mu: np.ndarray, sigma: np.ndarray, target_vol: float = 0.12, variant: str = 'conservative', df: pd.DataFrame = None, config: Dict[str, Any] = None) -> float:
     """Calibrate k to meet target volatility."""
     def objective(k):
-        weights = compute_weights(mu, sigma, k, variant, df)
+        weights = compute_weights(mu, sigma, k, variant, df, config)
         port_returns = simulate_portfolio(returns, weights)
         vol = port_returns.std() * np.sqrt(252)
         return abs(vol - target_vol)

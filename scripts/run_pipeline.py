@@ -4,6 +4,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+import yaml
 from src.utils import setup_logging, set_seeds, save_json, get_git_commit, timestamp
 from src.data import get_cached_data
 from src.features import create_features, save_features, load_features
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description='Run forecasting pipeline')
+    parser.add_argument('--config', default='configs/baseline.yaml', help='Path to config YAML file')
     parser.add_argument('--data-root', default='/data', help='Data root directory')
     parser.add_argument('--rebuild-cache', action='store_true', help='Rebuild cache')
     parser.add_argument('--use-gpu', action='store_true', help='Use GPU for LightGBM')
@@ -28,8 +30,12 @@ def main():
     parser.add_argument('--k', type=float, default=None, help='Leverage calibration factor')
     args = parser.parse_args()
     
+    # Load config
+    with open(args.config, 'r') as f:
+        config = yaml.safe_load(f)
+    
     setup_logging()
-    set_seeds()
+    set_seeds(config.get('seed', 42))
     
     # Paths
     cache_path = 'cache/processed_data.parquet'
@@ -59,8 +65,8 @@ def main():
     feature_cols = [c for c in df_feat.columns if c not in [target_col, vol_target]]
     
     # Train models
-    stacked_model = train_stacked_model(df_feat, target_col, feature_cols)
-    vol_model = train_volatility_model(df_feat, vol_target, feature_cols)
+    stacked_model = train_stacked_model(df_feat, target_col, feature_cols, config)
+    vol_model = train_volatility_model(df_feat, vol_target, feature_cols, config)
     
     # Save models
     save_model(stacked_model, os.path.join(artifacts_dir, 'stacked_model.pkl'))
@@ -73,13 +79,18 @@ def main():
     # Calibrate k if not provided
     if args.k is None:
         returns = df_feat[target_col]  # Assume this is returns
-        args.k = calibrate_k(returns, mu, sigma, variant=args.variant, df=df_feat)
+        args.k = calibrate_k(returns, mu, sigma, variant=args.variant, df=df_feat, config=config)
+    
+    # Override k from config if specified
+    if 'leverage_calibration_k' in config['model']:
+        args.k = config['model']['leverage_calibration_k']
     
     # Compute weights
-    weights = compute_weights(mu, sigma, args.k, args.variant, df_feat)
+    weights = compute_weights(mu, sigma, args.k, args.variant, df_feat, config)
     
     # Apply EMA smoothing
-    weights = apply_ema_smoothing(weights, alpha=0.1)
+    ema_alpha = config['model'].get('ema_alpha', 0.1)
+    weights = apply_ema_smoothing(weights, alpha=ema_alpha)
     
     # Simulate and metrics
     port_returns = simulate_portfolio(df_feat[target_col], weights)
@@ -100,6 +111,7 @@ def main():
     
     # Save report
     report = {
+        'config': args.config,
         'variant': args.variant,
         'k': args.k,
         'sharpe': sharpe,

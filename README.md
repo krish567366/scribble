@@ -25,6 +25,7 @@ This project implements a production-ready forecasting pipeline for the Kaggle c
 
 ```bash
 python scripts/run_pipeline.py \
+  --config configs/baseline.yaml \
   --data-root /data \
   --rebuild-cache \
   --use-gpu \
@@ -34,7 +35,14 @@ python scripts/run_pipeline.py \
   --val-window 252
 ```
 
-#### Notebook
+#### Config Files
+
+Use YAML config files in `configs/` to specify parameters:
+
+- `configs/baseline.yaml`: Conservative baseline configuration
+- `configs/variant1.yaml`: Aggressive variant with different parameters
+
+Config parameters include model hyperparameters, leverage settings, and backtest parameters.
 
 Open `nbk/forecast_pipeline.ipynb` and run all cells. Ensure data is in `/data`.
 

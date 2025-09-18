@@ -1,0 +1,15 @@
+data:
+  train_path: data/train.csv
+  test_path: data/test.csv
+model:
+  type: lgbm
+  leverage_calibration_k: 2.0
+  ema_alpha: 0.1
+  regime_sensitivity: 0.6
+  max_depth: 8
+  n_estimators: 500
+backtest:
+  start_date: 2020-01-01
+  end_date: 2021-12-31
+  initial_cash: 100000
+seed: 123
