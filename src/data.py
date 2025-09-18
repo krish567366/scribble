@@ -35,6 +35,10 @@ def load_raw_data(data_root: str) -> pd.DataFrame:
             df['price'] = 100 + np.random.randn(len(df)) * 10
         
         # Set date_id as index for now (can be converted to datetime later)
+        if df.index.has_duplicates:
+            logger.warning("Duplicate indices found, keeping first occurrence")
+            df = df[~df.index.duplicated(keep='first')]
+        
         df.set_index('date_id', inplace=True)
         
         logger.info(f"Loaded data with shape: {df.shape}")
@@ -50,7 +54,7 @@ def impute_data(df: pd.DataFrame) -> pd.DataFrame:
     df_imputed = df.copy()
     
     # Forward-fill for time series gaps
-    df_imputed = df_imputed.fillna(method='ffill')
+    df_imputed = df_imputed.ffill()
     
     # For remaining NaNs, use iterative imputer (simple version of SoftImpute)
     imputer = IterativeImputer(random_state=42, max_iter=10)

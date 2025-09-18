@@ -43,9 +43,18 @@ def encode_regime(df: pd.DataFrame, n_clusters: int = 3) -> pd.DataFrame:
     if available_features:
         X = df[available_features].dropna()
         if len(X) > n_clusters:
-            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
             regimes = kmeans.fit_predict(X)
-            df['regime'] = pd.Series(regimes, index=X.index)
+            
+            # Create a Series with the same index as X, then reindex to match df
+            regime_series = pd.Series(regimes, index=X.index)
+            df['regime'] = regime_series.reindex(df.index)
+            
+            # Fill NaN regimes with the most common regime
+            if df['regime'].isna().any():
+                most_common_regime = df['regime'].mode().iloc[0] if not df['regime'].mode().empty else 0
+                df['regime'] = df['regime'].fillna(most_common_regime)
+            
             df = pd.get_dummies(df, columns=['regime'], prefix='regime')
         else:
             logger.warning("Not enough data for regime clustering")
